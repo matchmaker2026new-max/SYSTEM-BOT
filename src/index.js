@@ -49,6 +49,8 @@ const TAX_CHANNEL_ID = '1545360870488539287';
 const FEEDBACK_CHANNEL_ID = '1520221295944400957';
 const LINE_IMAGE_URL = 'https://cdn.phototourl.com/free/2026-09-09-10fc198a-e35a-4e25-a8d0-4b2e12389c8f.png';
 const TAX_RATE = 0.05;
+const processedMessageIds = new Map();
+const processedInteractionIds = new Set();
 
 const MOD_ROLE_ID = '1546616567016722463';
 const modCommands = new Set(['clear', 'ban', 'kick', 'timeout', 'untimeout', 'mute', 'warn', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
@@ -395,6 +397,9 @@ async function execute(name, ctx, args = []) {
 client.once('ready', async () => { const rest = new REST({ version: '10' }).setToken(token); const route = guildId ? Routes.applicationGuildCommands(clientId, guildId) : Routes.applicationCommands(clientId); await rest.put(route, { body: slashCommands }); console.log(`✅ Logged in as ${client.user.tag}; ${slashCommands.length} slash commands registered.`); });
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
+  if (processedMessageIds.has(message.id)) return;
+  processedMessageIds.set(message.id, Date.now());
+  setTimeout(() => processedMessageIds.delete(message.id), 60000);
   const rawContent = message.content.trim();
   const parsed = parseCommand(rawContent);
 
@@ -418,7 +423,6 @@ client.on('messageCreate', async message => {
         .setTimestamp();
       await message.channel.send({ content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } });
       await message.delete().catch(() => {});
-      await sendAutoLine(message);
       return;
     }
 
@@ -458,6 +462,9 @@ client.on('messageCreate', async message => {
   }
 });
 client.on('interactionCreate', async interaction => {
+  if (processedInteractionIds.has(interaction.id)) return;
+  processedInteractionIds.add(interaction.id);
+  setTimeout(() => processedInteractionIds.delete(interaction.id), 60000);
   try {
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('add-info-button:')) {
