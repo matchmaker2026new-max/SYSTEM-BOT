@@ -47,10 +47,11 @@ const COLOR = 0x5865f2;
 const EMOJIS = { ok: '✦', error: '✧', mod: '🛡️', time: '⏱️', trash: '🧹', ban: '🔨', kick: '👢', lock: '🔒', unlock: '🔓', gift: '🎁', bell: '🔔', info: '💠' };
 const TAX_CHANNEL_ID = '1545360870488539287';
 const FEEDBACK_CHANNEL_ID = '1520221295944400957';
+const LINE_IMAGE_URL = 'https://cdn.phototourl.com/free/2026-09-09-10fc198a-e35a-4e25-a8d0-4b2e12389c8f.png';
 const TAX_RATE = 0.05;
 
 const MOD_ROLE_ID = '1546616567016722463';
-const modCommands = new Set(['clear', 'ban', 'kick', 'timeout', 'untimeout', 'mute', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
+const modCommands = new Set(['clear', 'ban', 'kick', 'timeout', 'untimeout', 'mute', 'warn', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
 const defs = [
   ['add-autoline-channel', 'تحديد قناة الخط التلقائي', [{ name: 'channel', description: 'القناة', type: 7, required: true }]],
   ['add-button', 'إرسال زر تفاعلي', [{ name: 'text', description: 'نص الزر', type: 3, required: true }]],
@@ -60,6 +61,7 @@ const defs = [
   ['clear', 'مسح عدد من الرسائل', [{ name: 'amount', description: 'عدد الرسائل من 1 إلى 100', type: 4, required: false }]],
   ['ban', 'حظر عضو من السيرفر', [{ name: 'user', description: 'العضو المطلوب حظره', type: 6, required: true }, { name: 'reason', description: 'سبب الحظر', type: 3, required: false }]],
   ['kick', 'طرد عضو من السيرفر', [{ name: 'user', description: 'العضو المطلوب طرده', type: 6, required: true }, { name: 'reason', description: 'سبب الطرد', type: 3, required: false }]],
+  ['warn', 'تحذير عضو', [{ name: 'user', description: 'العضو المطلوب تحذيره', type: 6, required: true }]],
   ['timeout', 'كتم عضو لمدة بالدقائق', [{ name: 'user', description: 'العضو المطلوب كتمه', type: 6, required: true }, { name: 'minutes', description: 'المدة بالدقائق', type: 4, required: false }]],
   ['untimeout', 'إزالة الكتم عن عضو', [{ name: 'user', description: 'العضو', type: 6, required: true }]],
   ['anti-ban', 'تفعيل أو تعطيل حماية الحظر', [{ name: 'enabled', description: 'تشغيل أو إيقاف', type: 5, required: true }]],
@@ -126,8 +128,8 @@ const slashCommands = defs.map(([name, description, options]) => ({ name, descri
 const aliases = {
   'م': 'clear', 'مسح': 'clear',
   'كسرة': 'ban', 'ب': 'ban', 'باند': 'ban',
-  'ط': 'kick', 'طرد': 'kick',
-  'اص': 'timeout', 'ك': 'timeout', 'كتم': 'timeout',
+  'ط': 'kick', 'طرد': 'kick', 'برا': 'kick',
+  'اص': 'timeout', 'ك': 'timeout', 'كتم': 'timeout', 'تايم': 'timeout',
   'فك': 'untimeout',
   'ق': 'lock', 'قفل': 'lock', 'فتح': 'unlock',
   'اخفاء': 'hide', 'إخفاء': 'hide',
@@ -140,7 +142,7 @@ const aliases = {
   'بنق': 'ping', 'حالة-الحماية': 'protection-status',
   'خط': 'line-mode', 'اقتراحات': 'suggestion-mode', 'ضريبة': 'tax',
   'حذف-التوكنات': 'remove-all-tokens', 'حذف-توكن': 'remove-token', 'حذف-خط': 'remove-autoline-channel',
-  'تعال': 'come', 'رد': 'autoreply-add', 'ردود': 'autoreply-list', 'حذف-رد': 'autoreply-remove',
+  'تعال': 'come', 'رد': 'autoreply-add', 'ردود': 'autoreply-list', 'حذف-رد': 'autoreply-remove', 'تحذير': 'warn',
   'سحب': 'gstart', 'مساعدة': 'help', 'تحذير': 'warn'
 };
 
@@ -244,11 +246,20 @@ function getGuildSetting(guildIdValue, settingName, fallback = null) {
   const value = store.read().settings[settingKey(guildIdValue, settingName)];
   return value ?? fallback;
 }
+function shouldSendAutoLine(message) {
+  if (!message.guild) return false;
+  if (message.channel.id === FEEDBACK_CHANNEL_ID) return true;
+  const configuredChannel = getGuildSetting(message.guild.id, 'add-autoline-channel');
+  return configuredChannel === message.channel.id && getGuildSetting(message.guild.id, 'line-mode', false) === true;
+}
+async function sendAutoLine(message) {
+  if (shouldSendAutoLine(message)) await message.channel.send({ files: [LINE_IMAGE_URL] }).catch(() => {});
+}
 
 async function execute(name, ctx, args = []) {
   const guild = guildOf(ctx);
   if (!guild && !['avatar', 'banner', 'help'].includes(name)) return reply(ctx, 'هذا الأمر يعمل داخل السيرفر فقط.');
-  if (modCommands.has(name) && !isMod(ctx.member)) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر تنفيذ الأمر`, 'تحتاج إلى صلاحية إدارة الرسائل.', 0xed4245)] });
+  if (modCommands.has(name) && !isMod(ctx.member)) return;
   if (name === 'help') return reply(ctx, `الأوامر المختصرة:\n${prefix}م / clear → مسح الرسائل\n${prefix}ب / ban → حظر عضو\n${prefix}ط / kick → طرد عضو\n${prefix}ك / timeout → كتم عضو\n${prefix}ق / lock → قفل القناة\n${prefix}فتح / unlock → فتح القناة\n${prefix}قول / say → يكتب رسالة باسم البوت\n${prefix}اقتراحات / suggestion-mode → تفعيل اقتراحات\n${prefix}ضريبة / tax → حساب الضريبة 5%\n${prefix}مساعدة / help → قائمة الأوامر\n\nأوامر الـ Slash تعمل أيضًا بنفس الوظائف.`);
   if (name === 'gend') name = 'gstart';
   if (name === 'ping') return reply(ctx, { embeds: [card('🏓 Ping', `زمن استجابة البوت: **${client.ws.ping}ms**`, 0x57f287)] });
@@ -264,7 +275,10 @@ async function execute(name, ctx, args = []) {
   if (name === 'add-autoline-channel' || name === 'add-nadeko-room') {
     const channel = ctx.isChatInputCommand?.() ? ctx.options.getChannel('channel') : guild.channels.cache.get(args[0]);
     if (!channel) return reply(ctx, 'حدد القناة المطلوبة.');
-    store.update(data => { data.settings[key(guild.id, name)] = channel.id; });
+    store.update(data => {
+      data.settings[key(guild.id, name)] = channel.id;
+      if (name === 'add-autoline-channel') data.settings[key(guild.id, 'line-mode')] = true;
+    });
     return reply(ctx, `✅ تم ربط القناة ${channel} بالأمر ${name}.`);
   }
   if (name === 'close' || name === 'close-apply') {
@@ -404,6 +418,7 @@ client.on('messageCreate', async message => {
         .setTimestamp();
       await message.channel.send({ content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } });
       await message.delete().catch(() => {});
+      await sendAutoLine(message);
       return;
     }
 
@@ -431,6 +446,7 @@ client.on('messageCreate', async message => {
         await message.reply({ content: '✅ تم إرسال اقتراحك بنجاح، وسيصل إلى المالك في الخاص.', allowedMentions: { repliedUser: false } }).catch(() => {});
       }
     }
+    await sendAutoLine(message);
   }
   if (message.guild && message.channel.id === TAX_CHANNEL_ID && parseCreditAmount(message.content)) {
     try {
