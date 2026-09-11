@@ -89,7 +89,7 @@ async function removeDuplicateFeedbackReplies(message) {
 }
 
 const MOD_ROLE_ID = '1546616567016722463';
-const modCommands = new Set(['clear', 'ban', 'kick', 'timeout', 'untimeout', 'mute', 'warn', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
+const modCommands = new Set(['clear', 'ban', 'unban', 'kick', 'timeout', 'untimeout', 'mute', 'warn', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
 const defs = [
   ['add-autoline-channel', 'تحديد قناة الخط التلقائي', [{ name: 'channel', description: 'القناة', type: 7, required: true }]],
   ['add-button', 'إرسال زر تفاعلي', [{ name: 'text', description: 'نص الزر', type: 3, required: true }]],
@@ -98,6 +98,7 @@ const defs = [
   ['add-ticket-button', 'إرسال زر تذكرة', [{ name: 'text', description: 'نص الزر', type: 3, required: false }]],
   ['clear', 'مسح عدد من الرسائل', [{ name: 'amount', description: 'عدد الرسائل من 1 إلى 100', type: 4, required: false }]],
   ['ban', 'حظر عضو من السيرفر', [{ name: 'user', description: 'العضو المطلوب حظره', type: 6, required: true }, { name: 'reason', description: 'سبب الحظر', type: 3, required: false }]],
+  ['unban', 'إزالة الحظر عن مستخدم', [{ name: 'user', description: 'معرف المستخدم', type: 3, required: true }]],
   ['kick', 'طرد عضو من السيرفر', [{ name: 'user', description: 'العضو المطلوب طرده', type: 6, required: true }, { name: 'reason', description: 'سبب الطرد', type: 3, required: false }]],
   ['warn', 'تحذير عضو', [{ name: 'user', description: 'العضو المطلوب تحذيره', type: 6, required: true }]],
   ['timeout', 'كتم عضو لمدة بالدقائق', [{ name: 'user', description: 'العضو المطلوب كتمه', type: 6, required: true }, { name: 'minutes', description: 'المدة بالدقائق', type: 4, required: false }]],
@@ -165,10 +166,11 @@ const defs = [
 const slashCommands = defs.map(([name, description, options]) => ({ name, description, options, default_member_permissions: modCommands.has(name) ? String(PermissionFlagsBits.ManageMessages) : undefined }));
 const aliases = {
   'م': 'clear', 'مسح': 'clear',
-  'كسرة': 'ban', 'ب': 'ban', 'باند': 'ban',
+  'كسرة': 'ban', 'ب': 'ban', 'باند': 'ban', 'بان': 'ban',
+  'ان باند': 'unban', 'ان-باند': 'unban', 'فك-الباند': 'unban', 'unban': 'unban',
   'ط': 'kick', 'طرد': 'kick', 'برا': 'kick',
   'اص': 'timeout', 'ك': 'timeout', 'كتم': 'timeout', 'تايم': 'timeout',
-  'فك': 'untimeout',
+  'ان تايم': 'untimeout', 'ان-تايم': 'untimeout', 'فك': 'untimeout',
   'ق': 'lock', 'قفل': 'lock', 'فتح': 'unlock',
   'اخفاء': 'hide', 'إخفاء': 'hide',
   'اضافة': 'add-user', 'إضافة': 'add-user',
@@ -223,7 +225,12 @@ function parseCommand(rawContent) {
   const candidate = (isPrefixed ? content.slice(prefix.length) : content).trim();
   if (!candidate) return null;
   const parts = candidate.split(/\s+/);
-  const raw = parts.shift()?.toLowerCase();
+  let raw = parts.shift()?.toLowerCase();
+  const twoWordAlias = `${raw || ''} ${(parts[0] || '').toLowerCase()}`.trim();
+  if (aliases[twoWordAlias]) {
+    raw = twoWordAlias;
+    parts.shift();
+  }
   const name = aliases[raw] || raw;
   if (!name || !defs.some(([command]) => command === name)) return null;
   return { name, args: parts };
@@ -380,6 +387,12 @@ async function execute(name, ctx, args = []) {
   if (name === 'avatar' || name === 'banner') { const user = userOf(ctx); const fetched = await client.users.fetch(user.id, { force: true }); const url = name === 'banner' ? fetched.bannerURL({ size: 1024, extension: 'png' }) : fetched.displayAvatarURL({ size: 1024, extension: 'png' }); return reply(ctx, url ? { embeds: [new EmbedBuilder().setTitle(name === 'banner' ? `بانر ${user.username}` : `صورة ${user.username}`).setImage(url)] } : 'لا يوجد بانر لهذا العضو.'); }
   if (name === 'clear') { const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100); const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1; const messages = await ctx.channel.bulkDelete(deleteAmount, true); const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1); const payload = { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] }; if (ctx.isChatInputCommand?.()) return ctx.reply({ ...payload, ephemeral: true }); const sent = await ctx.channel.send(payload); setTimeout(() => sent.delete().catch(() => {}), 6000); return sent; }
   if (name === 'delete') return ctx.isChatInputCommand?.() ? reply(ctx, 'استخدم أمر المسح لحذف الرسائل؛ لا يمكن حذف رسالة Slash.') : ctx.delete().catch(() => {});
+  if (name === 'unban') {
+    const userId = ctx.isChatInputCommand?.() ? ctx.options.getString('user') : args[0];
+    if (!/^\d{15,20}$/.test(userId || '')) return reply(ctx, 'اكتب معرف المستخدم الرقمي لإزالة الحظر.');
+    await guild.members.unban(userId, 'إزالة الحظر بواسطة البوت');
+    return reply(ctx, { embeds: [card('✅ تمت إزالة الحظر', `تم فك الحظر عن المستخدم \`${userId}\` بنجاح.`, 0x57f287)] });
+  }
   if (name === 'ban' || name === 'kick') { const member = memberOf(ctx); if (!member) return reply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (name === 'ban' && !member.bannable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الحظر`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); if (name === 'kick' && !member.kickable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الطرد`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const reason = ctx.isChatInputCommand?.() ? ctx.options.getString('reason') : args.slice(1).join(' '); await (name === 'ban' ? member.ban({ reason: reason || 'لم يتم ذكر سبب' }) : member.kick(reason || 'لم يتم ذكر سبب')); return reply(ctx, { embeds: [card(name === 'ban' ? `${EMOJIS.ban} تم الحظر بنجاح` : `${EMOJIS.kick} تم الطرد بنجاح`, `${name === 'ban' ? 'تم حظر' : 'تم طرد'} العضو ${mention(member)} من السيرفر.\n\n**السبب:** ${reason || 'لم يتم ذكر سبب'}`, 0xed4245)] }); }
   if (name === 'timeout' || name === 'untimeout') { const member = memberOf(ctx); if (!member) return reply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (!member.moderatable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر تعديل الإسكات`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const duration = ctx.isChatInputCommand?.() ? Math.min(ctx.options.getInteger('minutes') || 10, 40320) * 60000 : parseDuration(args[1] || '10m'); if (name === 'untimeout') { await member.timeout(null, 'تم فك الإسكات بواسطة البوت'); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم فك الإسكات`, `تم فك الإسكات عن ${mention(member)} بنجاح.`, 0x57f287)] }); } await member.timeout(duration, 'تم الإسكات بواسطة البوت'); return reply(ctx, { embeds: [card(`${EMOJIS.time} تم إسكات العضو`, `تم إسكات العضو ${mention(member)} لمدة **${prettyDuration(duration)}**.`, 0xfee75c)] }); }
   if (name === 'lock' || name === 'unlock') { await ctx.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: name === 'unlock' }); return reply(ctx, { embeds: [card(name === 'lock' ? `${EMOJIS.lock} تم قفل القناة` : `${EMOJIS.unlock} تم فتح القناة`, name === 'lock' ? 'تم منع إرسال الرسائل في هذه القناة.' : 'تم السماح بإرسال الرسائل في هذه القناة.', name === 'lock' ? COLOR : 0x57f287)] }); }
@@ -407,9 +420,23 @@ async function execute(name, ctx, args = []) {
   if (name === 'come') {
     const member = memberOf(ctx);
     if (!member) return reply(ctx, 'حدد الشخص الذي تريد استدعاؤه.');
-    const channelName = guild?.channels?.cache?.find(c => c.id === ctx.channelId)?.name || 'هذا الشات';
-    await member.send(`📣 تعال الآن إلى شات **${channelName}**، تم طلبك من قبل **${ctx.user || ctx.author}**.`).catch(() => {});
-    return reply(ctx, `✅ تم إرسال رسالة استدعاء إلى ${member}.`);
+    const channel = guild.channels.cache.get(ctx.channelId);
+    const requester = ctx.user || ctx.author;
+    const sentAt = Math.floor(Date.now() / 1000);
+    const comeEmbed = new EmbedBuilder()
+      .setColor(0x57f287)
+      .setTitle('📣 استدعاء مباشر')
+      .setDescription(`مرحبًا ${mention(member)}، يُرجى التوجه إلى الروم الآن.`)
+      .addFields(
+        { name: '👤 طلب الحضور من', value: `${mention(requester)}`, inline: true },
+        { name: '📍 الروم', value: `${channel ? `<#${channel.id}>` : 'الروم الحالي'}\n${channel ? `https://discord.com/channels/${guild.id}/${channel.id}` : ''}`, inline: true },
+        { name: '🕒 وقت الإرسال', value: `<t:${sentAt}:F>\n<t:${sentAt}:R>`, inline: true }
+      )
+      .setFooter({ text: 'Nexora Store • استدعاء إداري' })
+      .setTimestamp();
+    await member.send({ embeds: [comeEmbed] }).catch(() => {});
+    if (!ctx.isChatInputCommand?.()) await ctx.delete().catch(() => {});
+    return reply(ctx, { embeds: [card('✅ تم إرسال الاستدعاء', `تم إرسال استدعاء أنيق إلى ${mention(member)} مع رابط الروم ووقت الطلب.`, 0x57f287)] });
   }
   if (name === 'warn') {
     const member = memberOf(ctx);
@@ -447,6 +474,7 @@ client.on('messageCreate', async message => {
       console.error(error);
       reply(message, 'حدث خطأ. تحقق من صلاحيات البوت.').catch(() => {});
     }
+    await message.delete().catch(() => {});
     return;
   }
 
