@@ -387,7 +387,7 @@ function getGuildSetting(guildIdValue, settingName, fallback = null) {
 }
 function shouldSendAutoLine(message) {
   if (!message.guild) return false;
-  if (message.channel.id === FEEDBACK_CHANNEL_ID) return true;
+  if (message.channel.id === FEEDBACK_CHANNEL_ID) return false;
   const configuredChannel = getGuildSetting(message.guild.id, 'add-autoline-channel');
   return configuredChannel === message.channel.id && getGuildSetting(message.guild.id, 'line-mode', false) === true;
 }
