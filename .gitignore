@@ -3,4 +3,5 @@ node_modules/
 data/store.json
 .bot.lock
 .message-claims/
+.interaction-claims/
 npm-debug.log*

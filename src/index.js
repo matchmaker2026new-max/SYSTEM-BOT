@@ -9,6 +9,7 @@ const store = require('./store');
 
 const instanceLockPath = path.join(__dirname, '..', '.bot.lock');
 const messageClaimDir = path.join(__dirname, '..', '.message-claims');
+const interactionClaimDir = path.join(__dirname, '..', '.interaction-claims');
 function ensureSingleInstance() {
   try {
     if (fs.existsSync(instanceLockPath)) {
@@ -77,6 +78,18 @@ function claimMessage(messageId) {
       }
     } catch (_) {}
     return false;
+  }
+}
+function claimInteraction(interactionId) {
+  fs.mkdirSync(interactionClaimDir, { recursive: true });
+  const claimPath = path.join(interactionClaimDir, `${interactionId}.lock`);
+  try {
+    const handle = fs.openSync(claimPath, 'wx');
+    fs.closeSync(handle);
+    setTimeout(() => fs.rmSync(claimPath, { force: true }), 120000);
+    return true;
+  } catch (error) {
+    return error.code === 'EEXIST' ? false : true;
   }
 }
 async function feedbackAlreadyHandled(message) {
@@ -600,6 +613,7 @@ client.on('messageCreate', async message => {
   }
 });
 client.on('interactionCreate', async interaction => {
+  if (!claimInteraction(interaction.id)) return;
   if (processedInteractionIds.has(interaction.id)) return;
   processedInteractionIds.add(interaction.id);
   setTimeout(() => processedInteractionIds.delete(interaction.id), 60000);
@@ -615,7 +629,8 @@ client.on('interactionCreate', async interaction => {
         game.winnerId = interaction.user.id;
         activeGames.delete(id);
         const winnerEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setDescription(`${interaction.message.embeds[0].description}\n\n🏆 الفائز: ${interaction.user}`);
-        return interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? movieQuestions.find(question => question.answer === game.answer).options : type === 'lucky' ? ['1', '2', '3', '4', '5'] : ['اضغط للفوز 🏆'], true)] });
+        await interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? movieQuestions.find(question => question.answer === game.answer).options : type === 'lucky' ? ['1', '2', '3', '4', '5'] : ['اضغط للفوز 🏆'], true)] }).catch(() => {});
+        return;
       }
       if (interaction.customId.startsWith('add-info-button:')) {
         const encoded = interaction.customId.split(':')[1] || '';
