@@ -555,15 +555,19 @@ async function execute(name, ctx, args = []) {
     }
     clearCommandLocks.set(lockKey, Date.now());
     setTimeout(() => clearCommandLocks.delete(lockKey), 1500);
+
     let fetched = new Collection();
     try {
       fetched = await ctx.channel.messages.fetch({ limit: Math.min(amount + 1, 100) });
     } catch {
       fetched = new Collection();
     }
+
     const messages = [...fetched.values()]
       .filter(item => item.id !== (ctx.id ?? ctx.message?.id))
+      .sort((a, b) => b.createdTimestamp - a.createdTimestamp)
       .slice(0, amount);
+
     for (const msg of messages) await msg.delete().catch(() => {});
     const deletedCount = messages.length;
     return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] });
