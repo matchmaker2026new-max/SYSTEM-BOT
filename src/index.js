@@ -694,10 +694,10 @@ client.on('interactionCreate', async interaction => {
       if (interaction.customId.startsWith('game:')) {
         const [, type, id, indexText] = interaction.customId.split(':');
         const game = activeGames.get(id);
-        if (!game || game.winnerId) return interaction.reply({ content: 'انتهت هذه الجولة أو فاز بها شخص آخر.', ephemeral: true });
+        if (!game || game.winnerId) return interaction.reply({ content: 'انتهت هذه الجولة أو فاز بها شخص آخر.', ephemeral: true }).catch(() => {});
         const index = Number(indexText);
         const correct = type === 'movie' && game.options[index] === game.answer || type === 'lucky' && index === game.answer;
-        if (!correct) return interaction.reply({ content: 'ليست الإجابة الصحيحة، حاول في جولة أخرى.', ephemeral: true });
+        if (!correct) return interaction.reply({ content: 'ليست الإجابة الصحيحة، حاول في جولة أخرى.', ephemeral: true }).catch(() => {});
         game.winnerId = interaction.user.id;
         activeGames.delete(id);
         releaseGameStart(interaction.channelId);
@@ -736,4 +736,5 @@ client.on('interactionCreate', async interaction => {
   }
 });
 +process.on('unhandledRejection', console.error);
++client.on('error', error => console.error('Discord client error:', error));
 +client.login(token);
