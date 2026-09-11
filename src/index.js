@@ -117,6 +117,14 @@ async function removeDuplicateSpeedChallenges(channel) {
     .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
   for (const duplicate of challenges.slice(1)) await duplicate.delete().catch(() => {});
 }
+async function removeDuplicateGamePanels(channel, title) {
+  const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  if (!recent) return;
+  const panels = [...recent.values()]
+    .filter(message => message.author.id === client.user.id && message.embeds[0]?.title === title)
+    .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+  for (const duplicate of panels.slice(1)) await duplicate.delete().catch(() => {});
+}
 async function feedbackAlreadyHandled(message) {
   const recent = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
   return recent?.some(item => item.author.id === client.user.id && item.reference?.messageId === message.id) || false;
@@ -422,12 +430,16 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'games') return reply(ctx, { embeds: [card('🎮 مركز الألعاب', 'اختر لعبة للفعالية:\n\n🎬 **movie** — خمن الفيلم من الإيموجي\n⚡ **speed** — أسرع شخص يضغط\n🍀 **lucky** — اختر رقمًا محظوظًا\n\nكل جولة لها فائز واحد فقط.', 0x9b59b6)] });
   if (name === 'movie') {
+    if (!claimGameStart(ctx.channelId)) return reply(ctx, 'توجد لعبة فعالة بالفعل في هذا الروم.');
     const question = movieQuestions[Math.floor(Math.random() * movieQuestions.length)];
     const id = gameId();
     const options = [...question.options].sort(() => Math.random() - 0.5);
     activeGames.set(id, { type: 'movie', answer: question.answer, options, winnerId: null, createdAt: Date.now() });
-    setTimeout(() => activeGames.delete(id), 120000);
-    return channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, options)] });
+    setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
+    const sent = await channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, options)] });
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await removeDuplicateGamePanels(ctx.channel, '🎬 خمن الفيلم');
+    return sent;
   }
   if (name === 'speed') {
     const existingSpeed = [...activeGames.values()].find(game => game.type === 'speed' && game.channelId === ctx.channelId && !game.winnerId);
@@ -447,11 +459,15 @@ async function execute(name, ctx, args = []) {
     return sent;
   }
   if (name === 'lucky') {
+    if (!claimGameStart(ctx.channelId)) return reply(ctx, 'توجد لعبة فعالة بالفعل في هذا الروم.');
     const id = gameId();
     const answer = Math.floor(Math.random() * 5);
     activeGames.set(id, { type: 'lucky', answer, winnerId: null, createdAt: Date.now() });
-    setTimeout(() => activeGames.delete(id), 120000);
-    return channelResponse(ctx, { embeds: [card('🍀 الرقم المحظوظ', 'اختر رقمًا من 1 إلى 5. أول اختيار صحيح يفوز!', 0x2ecc71)], components: [gameButtons('lucky', id, ['1', '2', '3', '4', '5'])] });
+    setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
+    const sent = await channelResponse(ctx, { embeds: [card('🍀 الرقم المحظوظ', 'اختر رقمًا من 1 إلى 5. أول اختيار صحيح يفوز!', 0x2ecc71)], components: [gameButtons('lucky', id, ['1', '2', '3', '4', '5'])] });
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await removeDuplicateGamePanels(ctx.channel, '🍀 الرقم المحظوظ');
+    return sent;
   }
   if (name === 'add-button' || name === 'add-info-button' || name === 'add-ticket-button') {
     const text = ctx.isChatInputCommand?.() ? (ctx.options.getString('text') || 'اضغط هنا') : args.join(' ') || 'اضغط هنا';
@@ -684,6 +700,7 @@ client.on('interactionCreate', async interaction => {
         if (!correct) return interaction.reply({ content: 'ليست الإجابة الصحيحة، حاول في جولة أخرى.', ephemeral: true });
         game.winnerId = interaction.user.id;
         activeGames.delete(id);
+        releaseGameStart(interaction.channelId);
         const winnerEmbed = gameWinnerEmbed(type === 'movie' ? 'فائز لعبة الفيلم' : 'فائز الرقم المحظوظ', interaction.user, type === 'movie' ? `الإجابة الصحيحة: **${game.answer}**` : `الرقم الفائز: **${game.answer + 1}**`);
         await interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? game.options : ['1', '2', '3', '4', '5'], true)] }).catch(() => {});
         return;
