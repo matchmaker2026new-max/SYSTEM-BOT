@@ -656,10 +656,12 @@ client.on('messageCreate', async message => {
         .setDescription(message.content.trim())
         .setFooter({ text: 'Nexora Store • رأيك يهمنا' })
         .setTimestamp();
-      await sendFeedbackMessage(message.channel, { content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } });
-      await sendFeedbackMessage(message.channel, { files: [LINE_IMAGE_URL], allowedMentions: { parse: [] } });
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await removeDuplicateFeedbackReplies(message);
+      await sendFeedbackMessage(message.channel, {
+        content: `شكراً لرأيك ${message.author} 🤍`,
+        embeds: [feedbackEmbed],
+        files: [LINE_IMAGE_URL],
+        allowedMentions: { parse: [], users: [message.author.id] }
+      });
       await message.delete().catch(() => {});
       return;
     }
