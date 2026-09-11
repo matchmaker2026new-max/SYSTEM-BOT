@@ -201,7 +201,7 @@ function reply(ctx, payload) {
     });
   }
   const message = typeof payload === 'string'
-    ? { content: payload, allowedMentions: { repliedUser: false } }
+    ? { embeds: [card('✅ تم التنفيذ', payload, 0x57f287)], allowedMentions: { parse: [], repliedUser: false } }
     : payload;
   const sent = ctx.reply(message);
   setTimeout(() => {
