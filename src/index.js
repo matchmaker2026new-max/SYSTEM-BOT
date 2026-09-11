@@ -63,6 +63,17 @@ const movieQuestions = [
   { emojis: '🕷️🧑🏙️', answer: 'Spider-Man', options: ['Batman', 'Spider-Man', 'Superman', 'Iron Man'] }
 ];
 const speedWords = ['نجمة', 'مغامرة', 'بطولة', 'سرعة', 'مفاجأة', 'تحدي', 'أسطورة', 'فوز'];
+const usedMovieQuestions = new Set();
+const usedSpeedWords = new Set();
+const usedLuckyNumbers = new Set();
+function nextUnused(items, used, key = item => item) {
+  const available = items.filter(item => !used.has(key(item)));
+  if (!available.length) used.clear();
+  const pool = available.length ? available : items;
+  const selected = pool[Math.floor(Math.random() * pool.length)];
+  used.add(key(selected));
+  return selected;
+}
 function claimMessage(messageId) {
   fs.mkdirSync(messageClaimDir, { recursive: true });
   const claimPath = path.join(messageClaimDir, `${messageId}.lock`);
@@ -109,6 +120,10 @@ function claimGameStart(channelId) {
 function releaseGameStart(channelId) {
   fs.rmSync(path.join(gameStartClaimDir, `${channelId}.lock`), { force: true });
 }
+function gameAlreadyRunning(ctx) {
+  if (ctx.isChatInputCommand?.()) return ctx.reply({ content: 'توجد لعبة فعالة بالفعل في هذا الروم.', ephemeral: true }).catch(() => {});
+  return Promise.resolve();
+}
 async function removeDuplicateSpeedChallenges(channel) {
   const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
   if (!recent) return;
@@ -141,9 +156,9 @@ async function removeDuplicateFeedbackReplies(message) {
     await duplicate.delete().catch(() => {});
   }
 }
-async function sendFeedbackMessage(channel, payload, messageId) {
+async function sendFeedbackMessage(channel, payload) {
   try {
-    return await channel.send({ ...payload, reply: { messageReference: messageId, failIfNotExists: false } });
+    return await channel.send(payload);
   } catch (error) {
     if (error.code !== 50035) throw error;
     return channel.send(payload);
@@ -430,8 +445,8 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'games') return reply(ctx, { embeds: [card('🎮 مركز الألعاب', 'اختر لعبة للفعالية:\n\n🎬 **movie** — خمن الفيلم من الإيموجي\n⚡ **speed** — أسرع شخص يضغط\n🍀 **lucky** — اختر رقمًا محظوظًا\n\nكل جولة لها فائز واحد فقط.', 0x9b59b6)] });
   if (name === 'movie') {
-    if (!claimGameStart(ctx.channelId)) return reply(ctx, 'توجد لعبة فعالة بالفعل في هذا الروم.');
-    const question = movieQuestions[Math.floor(Math.random() * movieQuestions.length)];
+    if (!claimGameStart(ctx.channelId)) return gameAlreadyRunning(ctx);
+    const question = nextUnused(movieQuestions, usedMovieQuestions, item => item.answer);
     const id = gameId();
     const options = [...question.options].sort(() => Math.random() - 0.5);
     activeGames.set(id, { type: 'movie', answer: question.answer, options, winnerId: null, createdAt: Date.now() });
@@ -443,9 +458,9 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'speed') {
     const existingSpeed = [...activeGames.values()].find(game => game.type === 'speed' && game.channelId === ctx.channelId && !game.winnerId);
-    if (existingSpeed || !claimGameStart(ctx.channelId)) return reply(ctx, 'توجد جولة سرعة فعالة بالفعل في هذا الروم.');
+    if (existingSpeed || !claimGameStart(ctx.channelId)) return gameAlreadyRunning(ctx);
     const id = gameId();
-    const word = speedWords[Math.floor(Math.random() * speedWords.length)];
+    const word = nextUnused(speedWords, usedSpeedWords);
     activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
     setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
     const sent = await channelResponse(ctx, { embeds: [new EmbedBuilder()
@@ -459,9 +474,9 @@ async function execute(name, ctx, args = []) {
     return sent;
   }
   if (name === 'lucky') {
-    if (!claimGameStart(ctx.channelId)) return reply(ctx, 'توجد لعبة فعالة بالفعل في هذا الروم.');
+    if (!claimGameStart(ctx.channelId)) return gameAlreadyRunning(ctx);
     const id = gameId();
-    const answer = Math.floor(Math.random() * 5);
+    const answer = nextUnused([0, 1, 2, 3, 4], usedLuckyNumbers);
     activeGames.set(id, { type: 'lucky', answer, winnerId: null, createdAt: Date.now() });
     setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
     const sent = await channelResponse(ctx, { embeds: [card('🍀 الرقم المحظوظ', 'اختر رقمًا من 1 إلى 5. أول اختيار صحيح يفوز!', 0x2ecc71)], components: [gameButtons('lucky', id, ['1', '2', '3', '4', '5'])] });
@@ -641,8 +656,8 @@ client.on('messageCreate', async message => {
         .setDescription(message.content.trim())
         .setFooter({ text: 'Nexora Store • رأيك يهمنا' })
         .setTimestamp();
-      await sendFeedbackMessage(message.channel, { content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } }, message.id);
-      await sendFeedbackMessage(message.channel, { files: [LINE_IMAGE_URL], allowedMentions: { parse: [] } }, message.id);
+      await sendFeedbackMessage(message.channel, { content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } });
+      await sendFeedbackMessage(message.channel, { files: [LINE_IMAGE_URL], allowedMentions: { parse: [] } });
       await new Promise(resolve => setTimeout(resolve, 500));
       await removeDuplicateFeedbackReplies(message);
       await message.delete().catch(() => {});
