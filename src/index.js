@@ -144,18 +144,6 @@ async function feedbackAlreadyHandled(message) {
   const recent = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
   return recent?.some(item => item.author.id === client.user.id && item.reference?.messageId === message.id) || false;
 }
-async function removeDuplicateFeedbackReplies(message) {
-  const recent = await message.channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!recent) return;
-  const replies = [...recent.values()]
-    .filter(item => item.author.id === client.user.id && item.reference?.messageId === message.id)
-    .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
-  const embeds = replies.filter(item => item.embeds.length > 0);
-  const images = replies.filter(item => item.embeds.length === 0 && item.attachments.size > 0);
-  for (const duplicate of [...embeds.slice(1), ...images.slice(1)]) {
-    await duplicate.delete().catch(() => {});
-  }
-}
 async function sendFeedbackMessage(channel, payload) {
   try {
     return await channel.send(payload);
