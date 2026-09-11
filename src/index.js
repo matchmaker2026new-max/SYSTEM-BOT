@@ -61,6 +61,7 @@ const movieQuestions = [
   { emojis: '🦈🌊🚤', answer: 'Jaws', options: ['Jaws', 'Finding Nemo', 'Jurassic Park', 'Aquaman'] },
   { emojis: '🕷️🧑🏙️', answer: 'Spider-Man', options: ['Batman', 'Spider-Man', 'Superman', 'Iron Man'] }
 ];
+const speedWords = ['نجمة', 'مغامرة', 'بطولة', 'سرعة', 'مفاجأة', 'تحدي', 'أسطورة', 'فوز'];
 function claimMessage(messageId) {
   fs.mkdirSync(messageClaimDir, { recursive: true });
   const claimPath = path.join(messageClaimDir, `${messageId}.lock`);
@@ -310,6 +311,14 @@ function gameButtons(type, id, labels, disabled = false) {
     .setStyle(index === 0 ? ButtonStyle.Primary : ButtonStyle.Secondary)
     .setDisabled(disabled)));
 }
+function gameWinnerEmbed(title, user, details) {
+  return new EmbedBuilder()
+    .setColor(0x57f287)
+    .setTitle(`🏆 ${title}`)
+    .setDescription(`الفائز هو ${user}\n\n${details}`)
+    .setFooter({ text: 'نظام الألعاب • فائز واحد لكل جولة' })
+    .setTimestamp();
+}
 function mention(member) { return member?.toString?.() || `<@${member?.id}>`; }
 function arabicNumber(value) { return Number(value).toLocaleString('ar-EG'); }
 function prettyDuration(ms) {
@@ -391,15 +400,17 @@ async function execute(name, ctx, args = []) {
   if (name === 'movie') {
     const question = movieQuestions[Math.floor(Math.random() * movieQuestions.length)];
     const id = gameId();
-    activeGames.set(id, { type: 'movie', answer: question.answer, winnerId: null, createdAt: Date.now() });
+    const options = [...question.options].sort(() => Math.random() - 0.5);
+    activeGames.set(id, { type: 'movie', answer: question.answer, options, winnerId: null, createdAt: Date.now() });
     setTimeout(() => activeGames.delete(id), 120000);
-    return channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, question.options)] });
+    return channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, options)] });
   }
   if (name === 'speed') {
     const id = gameId();
-    activeGames.set(id, { type: 'speed', winnerId: null, createdAt: Date.now() });
+    const word = speedWords[Math.floor(Math.random() * speedWords.length)];
+    activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
     setTimeout(() => activeGames.delete(id), 120000);
-    return channelResponse(ctx, { embeds: [card('⚡ أسرع شخص', 'اضغط الزر بأسرع ما يمكنك. أول شخص يضغط يفوز!', 0xe67e22)], components: [gameButtons('speed', id, ['اضغط للفوز 🏆'])] });
+    return channelResponse(ctx, { embeds: [card('⚡ أسرع شخص', `أول شخص يكتب الكلمة وحدها يفوز:\n\n# ${word}`, 0xe67e22)] });
   }
   if (name === 'lucky') {
     const id = gameId();
@@ -558,6 +569,15 @@ client.on('messageCreate', async message => {
   }
 
   if (message.guild) {
+    const speedGame = [...activeGames.entries()].find(([, game]) => game.type === 'speed' && game.channelId === message.channelId && !game.winnerId);
+    if (speedGame && message.content.trim() === speedGame[1].answer) {
+      const [id, game] = speedGame;
+      game.winnerId = message.author.id;
+      activeGames.delete(id);
+      await message.delete().catch(() => {});
+      await message.channel.send({ embeds: [gameWinnerEmbed('فائز لعبة السرعة', message.author, `الكلمة الصحيحة كانت: **${game.answer}**`)] });
+      return;
+    }
     if (message.channel.id === FEEDBACK_CHANNEL_ID && message.content.trim()) {
       if (await feedbackAlreadyHandled(message)) {
         await message.delete().catch(() => {});
@@ -624,12 +644,12 @@ client.on('interactionCreate', async interaction => {
         const game = activeGames.get(id);
         if (!game || game.winnerId) return interaction.reply({ content: 'انتهت هذه الجولة أو فاز بها شخص آخر.', ephemeral: true });
         const index = Number(indexText);
-        const correct = type === 'speed' || (type === 'movie' && movieQuestions.some(question => question.answer === game.answer && question.options[index] === game.answer)) || (type === 'lucky' && index === game.answer);
+        const correct = type === 'movie' && game.options[index] === game.answer || type === 'lucky' && index === game.answer;
         if (!correct) return interaction.reply({ content: 'ليست الإجابة الصحيحة، حاول في جولة أخرى.', ephemeral: true });
         game.winnerId = interaction.user.id;
         activeGames.delete(id);
-        const winnerEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setDescription(`${interaction.message.embeds[0].description}\n\n🏆 الفائز: ${interaction.user}`);
-        await interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? movieQuestions.find(question => question.answer === game.answer).options : type === 'lucky' ? ['1', '2', '3', '4', '5'] : ['اضغط للفوز 🏆'], true)] }).catch(() => {});
+        const winnerEmbed = gameWinnerEmbed(type === 'movie' ? 'فائز لعبة الفيلم' : 'فائز الرقم المحظوظ', interaction.user, type === 'movie' ? `الإجابة الصحيحة: **${game.answer}**` : `الرقم الفائز: **${game.answer + 1}**`);
+        await interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? game.options : ['1', '2', '3', '4', '5'], true)] }).catch(() => {});
         return;
       }
       if (interaction.customId.startsWith('add-info-button:')) {
