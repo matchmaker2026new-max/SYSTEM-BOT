@@ -410,7 +410,12 @@ async function execute(name, ctx, args = []) {
     const word = speedWords[Math.floor(Math.random() * speedWords.length)];
     activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
     setTimeout(() => activeGames.delete(id), 120000);
-    return channelResponse(ctx, { embeds: [card('⚡ أسرع شخص', `أول شخص يكتب الكلمة وحدها يفوز:\n\n# ${word}`, 0xe67e22)] });
+    return channelResponse(ctx, { embeds: [new EmbedBuilder()
+      .setColor(0xe67e22)
+      .setTitle('⚡ تحدي أسرع شخص')
+      .setDescription('أول شخص يكتب الكلمة وحدها يفوز!')
+      .addFields({ name: 'اكتب هذه الكلمة', value: `\n# **${word}**\n`, inline: false })
+      .setFooter({ text: 'اكتبها كما هي بدون أي كلمات إضافية' })] });
   }
   if (name === 'lucky') {
     const id = gameId();
@@ -574,7 +579,6 @@ client.on('messageCreate', async message => {
       const [id, game] = speedGame;
       game.winnerId = message.author.id;
       activeGames.delete(id);
-      await message.delete().catch(() => {});
       await message.channel.send({ embeds: [gameWinnerEmbed('فائز لعبة السرعة', message.author, `الكلمة الصحيحة كانت: **${game.answer}**`)] });
       return;
     }
