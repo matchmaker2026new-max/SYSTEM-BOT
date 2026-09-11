@@ -52,6 +52,14 @@ const LINE_IMAGE_URL = 'https://cdn.phototourl.com/free/2026-09-09-10fc198a-e35a
 const TAX_RATE = 0.05;
 const processedMessageIds = new Map();
 const processedInteractionIds = new Set();
+const activeGames = new Map();
+const movieQuestions = [
+  { emojis: '🧊🚢💔', answer: 'Titanic', options: ['Titanic', 'Avatar', 'Joker', 'Frozen'] },
+  { emojis: '🦁👑🌅', answer: 'The Lion King', options: ['The Lion King', 'The Matrix', 'Gladiator', 'Aladdin'] },
+  { emojis: '🧙‍♂️💍🌋', answer: 'The Lord of the Rings', options: ['Harry Potter', 'The Lord of the Rings', 'The Hobbit', 'Star Wars'] },
+  { emojis: '🦈🌊🚤', answer: 'Jaws', options: ['Jaws', 'Finding Nemo', 'Jurassic Park', 'Aquaman'] },
+  { emojis: '🕷️🧑🏙️', answer: 'Spider-Man', options: ['Batman', 'Spider-Man', 'Superman', 'Iron Man'] }
+];
 function claimMessage(messageId) {
   fs.mkdirSync(messageClaimDir, { recursive: true });
   const claimPath = path.join(messageClaimDir, `${messageId}.lock`);
@@ -129,6 +137,10 @@ const defs = [
   ['gend', 'بدء سحب مختصر', [{ name: 'seconds', description: 'المدة بالثواني', type: 4, required: true }, { name: 'prize', description: 'الجائزة', type: 3, required: true }]],
   ['greroll', 'إعادة اختيار فائز السحب', [{ name: 'message', description: 'معرف رسالة السحب', type: 3, required: true }]],
   ['gstart', 'بدء سحب تفاعلي', [{ name: 'seconds', description: 'المدة بالثواني', type: 4, required: true }, { name: 'prize', description: 'الجائزة', type: 3, required: true }]],
+  ['games', 'عرض ألعاب الفعاليات', []],
+  ['movie', 'خمن الفيلم من الإيموجي', []],
+  ['speed', 'لعبة أسرع شخص', []],
+  ['lucky', 'لعبة الرقم المحظوظ', []],
   ['lock', 'قفل القناة الحالية', []], ['unlock', 'فتح القناة الحالية', []], ['hide', 'إخفاء القناة عن الأعضاء', []],
   ['add-user', 'إضافة عضو إلى القناة', [{ name: 'user', description: 'العضو', type: 6, required: true }]],
   ['remove-user', 'إزالة عضو من القناة', [{ name: 'user', description: 'العضو', type: 6, required: true }]],
@@ -188,6 +200,7 @@ const aliases = {
   'قول': 'say', 'ارسال': 'send', 'إرسال': 'send', 'امبد': 'embed',
   'لقب': 'nickname', 'اسم': 'rename', 'رتبة': 'role', 'الرتب': 'roles',
   'بنق': 'ping', 'حالة-الحماية': 'protection-status',
+  'العاب': 'games', 'ألعاب': 'games', 'فيلم': 'movie', 'سرعة': 'speed', 'محظوظ': 'lucky',
   'خط': 'line-mode', 'line': 'line-mode', 'اقتراحات': 'suggestion-mode', 'ضريبة': 'tax',
   'حذف-التوكنات': 'remove-all-tokens', 'حذف-توكن': 'remove-token', 'حذف-خط': 'remove-autoline-channel',
   'تعال': 'come', 'رد': 'autoreply-add', 'ردود': 'autoreply-list', 'حذف-رد': 'autoreply-remove', 'تحذير': 'warn',
@@ -276,6 +289,14 @@ function parseEmbedColor(value) {
   if (/^[0-9a-f]{3}$/i.test(hex)) return Number.parseInt(hex.split('').map(char => char + char).join(''), 16);
   return null;
 }
+function gameId() { return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`; }
+function gameButtons(type, id, labels, disabled = false) {
+  return new ActionRowBuilder().addComponents(labels.map((label, index) => new ButtonBuilder()
+    .setCustomId(`game:${type}:${id}:${index}`)
+    .setLabel(label.slice(0, 80))
+    .setStyle(index === 0 ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    .setDisabled(disabled)));
+}
 function mention(member) { return member?.toString?.() || `<@${member?.id}>`; }
 function arabicNumber(value) { return Number(value).toLocaleString('ar-EG'); }
 function prettyDuration(ms) {
@@ -352,6 +373,27 @@ async function execute(name, ctx, args = []) {
     if (!match) return reply(ctx, 'أرسل منشن إيموجي صالح مثل <:emoji:123456789>.');
     const extension = match[1] ? 'gif' : 'png';
     return reply(ctx, `https://cdn.discordapp.com/emojis/${match[2]}.${extension}?size=1024&quality=lossless`);
+  }
+  if (name === 'games') return reply(ctx, { embeds: [card('🎮 مركز الألعاب', 'اختر لعبة للفعالية:\n\n🎬 **movie** — خمن الفيلم من الإيموجي\n⚡ **speed** — أسرع شخص يضغط\n🍀 **lucky** — اختر رقمًا محظوظًا\n\nكل جولة لها فائز واحد فقط.', 0x9b59b6)] });
+  if (name === 'movie') {
+    const question = movieQuestions[Math.floor(Math.random() * movieQuestions.length)];
+    const id = gameId();
+    activeGames.set(id, { type: 'movie', answer: question.answer, winnerId: null, createdAt: Date.now() });
+    setTimeout(() => activeGames.delete(id), 120000);
+    return channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, question.options)] });
+  }
+  if (name === 'speed') {
+    const id = gameId();
+    activeGames.set(id, { type: 'speed', winnerId: null, createdAt: Date.now() });
+    setTimeout(() => activeGames.delete(id), 120000);
+    return channelResponse(ctx, { embeds: [card('⚡ أسرع شخص', 'اضغط الزر بأسرع ما يمكنك. أول شخص يضغط يفوز!', 0xe67e22)], components: [gameButtons('speed', id, ['اضغط للفوز 🏆'])] });
+  }
+  if (name === 'lucky') {
+    const id = gameId();
+    const answer = Math.floor(Math.random() * 5);
+    activeGames.set(id, { type: 'lucky', answer, winnerId: null, createdAt: Date.now() });
+    setTimeout(() => activeGames.delete(id), 120000);
+    return channelResponse(ctx, { embeds: [card('🍀 الرقم المحظوظ', 'اختر رقمًا من 1 إلى 5. أول اختيار صحيح يفوز!', 0x2ecc71)], components: [gameButtons('lucky', id, ['1', '2', '3', '4', '5'])] });
   }
   if (name === 'add-button' || name === 'add-info-button' || name === 'add-ticket-button') {
     const text = ctx.isChatInputCommand?.() ? (ctx.options.getString('text') || 'اضغط هنا') : args.join(' ') || 'اضغط هنا';
@@ -563,6 +605,18 @@ client.on('interactionCreate', async interaction => {
   setTimeout(() => processedInteractionIds.delete(interaction.id), 60000);
   try {
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('game:')) {
+        const [, type, id, indexText] = interaction.customId.split(':');
+        const game = activeGames.get(id);
+        if (!game || game.winnerId) return interaction.reply({ content: 'انتهت هذه الجولة أو فاز بها شخص آخر.', ephemeral: true });
+        const index = Number(indexText);
+        const correct = type === 'speed' || (type === 'movie' && movieQuestions.some(question => question.answer === game.answer && question.options[index] === game.answer)) || (type === 'lucky' && index === game.answer);
+        if (!correct) return interaction.reply({ content: 'ليست الإجابة الصحيحة، حاول في جولة أخرى.', ephemeral: true });
+        game.winnerId = interaction.user.id;
+        activeGames.delete(id);
+        const winnerEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setDescription(`${interaction.message.embeds[0].description}\n\n🏆 الفائز: ${interaction.user}`);
+        return interaction.update({ embeds: [winnerEmbed], components: [gameButtons(type, id, type === 'movie' ? movieQuestions.find(question => question.answer === game.answer).options : type === 'lucky' ? ['1', '2', '3', '4', '5'] : ['اضغط للفوز 🏆'], true)] });
+      }
       if (interaction.customId.startsWith('add-info-button:')) {
         const encoded = interaction.customId.split(':')[1] || '';
         const text = Buffer.from(encoded, 'base64url').toString('utf8');
