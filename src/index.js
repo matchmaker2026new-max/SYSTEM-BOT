@@ -55,6 +55,7 @@ const TAX_RATE = 0.05;
 const processedMessageIds = new Map();
 const processedInteractionIds = new Set();
 const activeGames = new Map();
+const clearCommandLocks = new Map();
 const botSendGuard = new Map();
 const movieQuestions = [
   { emojis: '🧊🚢💔', answer: 'Titanic', options: ['Titanic', 'Avatar', 'Joker', 'Frozen'] },
@@ -544,7 +545,18 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'send-broadcast-panel') { const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('broadcast-confirm').setLabel('تأكيد الإرسال').setStyle(ButtonStyle.Danger)); return channelResponse(ctx, { embeds: [card('📢 لوحة البث', 'اضغط الزر لتأكيد إرسال البث.')], components: [row] }); }
   if (name === 'avatar' || name === 'banner') { const user = userOf(ctx); const fetched = await client.users.fetch(user.id, { force: true }); const url = name === 'banner' ? fetched.bannerURL({ size: 1024, extension: 'png' }) : fetched.displayAvatarURL({ size: 1024, extension: 'png' }); return reply(ctx, url ? { embeds: [new EmbedBuilder().setTitle(name === 'banner' ? `بانر ${user.username}` : `صورة ${user.username}`).setImage(url)] } : 'لا يوجد بانر لهذا العضو.'); }
-  if (name === 'clear') { const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100); const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1; const messages = await ctx.channel.bulkDelete(deleteAmount, true); const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1); return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] }); }
+  if (name === 'clear') {
+    const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100);
+    const channelKey = `${ctx.channel?.id ?? 'unknown'}:${ctx.guild?.id ?? 'dm'}:${ctx.user?.id ?? ctx.author?.id ?? 'unknown'}`;
+    const lockKey = `clear:${channelKey}:${amount}`;
+    if (clearCommandLocks.has(lockKey)) return reply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(0)}** رسالة بنجاح.`, 0x57f287)] });
+    clearCommandLocks.set(lockKey, Date.now());
+    setTimeout(() => clearCommandLocks.delete(lockKey), 1500);
+    const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1;
+    const messages = await ctx.channel.bulkDelete(deleteAmount, true).catch(() => new Collection());
+    const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1);
+    return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] });
+  }
   if (name === 'delete') return ctx.isChatInputCommand?.() ? reply(ctx, 'استخدم أمر المسح لحذف الرسائل؛ لا يمكن حذف رسالة Slash.') : ctx.delete().catch(() => {});
   if (name === 'unban') {
     const userId = ctx.isChatInputCommand?.() ? ctx.options.getString('user') : args[0];
