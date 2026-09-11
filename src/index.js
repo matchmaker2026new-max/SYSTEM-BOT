@@ -558,19 +558,21 @@ async function execute(name, ctx, args = []) {
 
     let fetched = new Collection();
     try {
-      fetched = await ctx.channel.messages.fetch({ limit: Math.min(amount + 1, 100) });
+      fetched = await ctx.channel.messages.fetch({ limit: Math.min(amount + 3, 100) });
     } catch {
       fetched = new Collection();
     }
 
-    const messages = [...fetched.values()]
-      .filter(item => item.id !== (ctx.id ?? ctx.message?.id))
+    const excludedMessageIds = new Set([ctx.id, ctx.message?.id, ctx.reference?.messageId]);
+    const candidates = [...fetched.values()]
+      .filter(item => !excludedMessageIds.has(item.id))
+      .filter(item => item.author.id !== client.user.id)
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp)
       .slice(0, amount);
 
-    for (const msg of messages) await msg.delete().catch(() => {});
-    const deletedCount = messages.length;
-    return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] });
+    for (const msg of candidates) await msg.delete().catch(() => {});
+
+    return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(candidates.length)}** رسالة بنجاح.`, 0x57f287)] });
   }
   if (name === 'delete') return ctx.isChatInputCommand?.() ? reply(ctx, 'استخدم أمر المسح لحذف الرسائل؛ لا يمكن حذف رسالة Slash.') : ctx.delete().catch(() => {});
   if (name === 'unban') {
