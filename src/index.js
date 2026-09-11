@@ -87,6 +87,14 @@ async function removeDuplicateFeedbackReplies(message) {
     await duplicate.delete().catch(() => {});
   }
 }
+async function sendFeedbackMessage(channel, payload, messageId) {
+  try {
+    return await channel.send({ ...payload, reply: { messageReference: messageId, failIfNotExists: false } });
+  } catch (error) {
+    if (error.code !== 50035) throw error;
+    return channel.send(payload);
+  }
+}
 
 const MOD_ROLE_ID = '1546616567016722463';
 const modCommands = new Set(['clear', 'ban', 'unban', 'kick', 'timeout', 'untimeout', 'mute', 'warn', 'lock', 'unlock', 'hide', 'add-user', 'remove-user', 'delete', 'autoreply-add', 'autoreply-remove', 'line-mode', 'logs-info', 'nickname', 'protection-status', 'remove-all-tokens', 'remove-autoline-channel', 'remove-nadeko-room', 'remove-token', 'rename', 'role', 'send', 'send-broadcast-panel', 'set-autoline-line', 'set-feedback-line', 'set-feedback-room', 'set-message', 'set-project-logs', 'set-shortcut', 'set-suggestions-line', 'set-suggestions-room', 'set-tax-line', 'set-tax-room', 'setup-logs', 'setup-rating', 'setup-welcome', 'suggestion-mode', 'tax', 'come']);
@@ -490,9 +498,8 @@ client.on('messageCreate', async message => {
         .setDescription(message.content.trim())
         .setFooter({ text: 'Nexora Store • رأيك يهمنا' })
         .setTimestamp();
-      const replyOptions = { messageReference: message.id, failIfNotExists: false };
-      await message.channel.send({ content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], reply: replyOptions, allowedMentions: { users: [message.author.id] } });
-      await message.channel.send({ files: [LINE_IMAGE_URL], reply: replyOptions, allowedMentions: { parse: [] } });
+      await sendFeedbackMessage(message.channel, { content: `شكراً لرأيك ${message.author} 🤍`, embeds: [feedbackEmbed], allowedMentions: { users: [message.author.id] } }, message.id);
+      await sendFeedbackMessage(message.channel, { files: [LINE_IMAGE_URL], allowedMentions: { parse: [] } }, message.id);
       await new Promise(resolve => setTimeout(resolve, 500));
       await removeDuplicateFeedbackReplies(message);
       await message.delete().catch(() => {});
