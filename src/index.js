@@ -100,11 +100,14 @@ function claimGameStart(channelId) {
   try {
     const handle = fs.openSync(claimPath, 'wx');
     fs.closeSync(handle);
-    setTimeout(() => fs.rmSync(claimPath, { force: true }), 5000);
+    setTimeout(() => fs.rmSync(claimPath, { force: true }), 120000);
     return true;
   } catch (error) {
     return error.code !== 'EEXIST';
   }
+}
+function releaseGameStart(channelId) {
+  fs.rmSync(path.join(gameStartClaimDir, `${channelId}.lock`), { force: true });
 }
 async function feedbackAlreadyHandled(message) {
   const recent = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
@@ -424,12 +427,12 @@ async function execute(name, ctx, args = []) {
     const id = gameId();
     const word = speedWords[Math.floor(Math.random() * speedWords.length)];
     activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
-    setTimeout(() => activeGames.delete(id), 120000);
+    setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
     return channelResponse(ctx, { embeds: [new EmbedBuilder()
       .setColor(0xe67e22)
       .setTitle('⚡ تحدي أسرع شخص')
       .setDescription('أول شخص يكتب الكلمة وحدها يفوز!')
-      .addFields({ name: 'اكتب هذه الكلمة', value: `\n╭━━━━━━━━━━━━╮\n┃   **${word}**   ┃\n╰━━━━━━━━━━━━╯\n`, inline: false })
+      .addFields({ name: 'اكتب هذه الكلمة', value: `\n**『 ${word} 』**\n`, inline: false })
       .setFooter({ text: 'اكتبها كما هي بدون أي كلمات إضافية' })] });
   }
   if (name === 'lucky') {
@@ -594,6 +597,7 @@ client.on('messageCreate', async message => {
       const [id, game] = speedGame;
       game.winnerId = message.author.id;
       activeGames.delete(id);
+      releaseGameStart(message.channelId);
       await message.channel.send({ embeds: [gameWinnerEmbed('فائز لعبة السرعة', message.author, `الكلمة الصحيحة كانت: **${game.answer}**`)] });
       return;
     }
