@@ -550,12 +550,22 @@ async function execute(name, ctx, args = []) {
     const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100);
     const channelKey = `${ctx.channel?.id ?? 'unknown'}:${ctx.guild?.id ?? 'dm'}:${ctx.user?.id ?? ctx.author?.id ?? 'unknown'}`;
     const lockKey = `clear:${channelKey}:${amount}`;
-    if (clearCommandLocks.has(lockKey)) return reply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(0)}** رسالة بنجاح.`, 0x57f287)] });
+    if (clearCommandLocks.has(lockKey)) {
+      return reply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(0)}** رسالة بنجاح.`, 0x57f287)] });
+    }
     clearCommandLocks.set(lockKey, Date.now());
     setTimeout(() => clearCommandLocks.delete(lockKey), 1500);
-    const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1;
-    const messages = await ctx.channel.bulkDelete(deleteAmount, true).catch(() => new Collection());
-    const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1);
+    let fetched = new Collection();
+    try {
+      fetched = await ctx.channel.messages.fetch({ limit: Math.min(amount + 1, 100) });
+    } catch {
+      fetched = new Collection();
+    }
+    const messages = [...fetched.values()]
+      .filter(item => item.id !== (ctx.id ?? ctx.message?.id))
+      .slice(0, amount);
+    for (const msg of messages) await msg.delete().catch(() => {});
+    const deletedCount = messages.length;
     return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] });
   }
   if (name === 'delete') return ctx.isChatInputCommand?.() ? reply(ctx, 'استخدم أمر المسح لحذف الرسائل؛ لا يمكن حذف رسالة Slash.') : ctx.delete().catch(() => {});
