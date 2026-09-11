@@ -109,6 +109,14 @@ function claimGameStart(channelId) {
 function releaseGameStart(channelId) {
   fs.rmSync(path.join(gameStartClaimDir, `${channelId}.lock`), { force: true });
 }
+async function removeDuplicateSpeedChallenges(channel) {
+  const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  if (!recent) return;
+  const challenges = [...recent.values()]
+    .filter(message => message.author.id === client.user.id && message.embeds[0]?.title === '⚡ تحدي أسرع شخص')
+    .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+  for (const duplicate of challenges.slice(1)) await duplicate.delete().catch(() => {});
+}
 async function feedbackAlreadyHandled(message) {
   const recent = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
   return recent?.some(item => item.author.id === client.user.id && item.reference?.messageId === message.id) || false;
@@ -428,12 +436,15 @@ async function execute(name, ctx, args = []) {
     const word = speedWords[Math.floor(Math.random() * speedWords.length)];
     activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
     setTimeout(() => { activeGames.delete(id); releaseGameStart(ctx.channelId); }, 120000);
-    return channelResponse(ctx, { embeds: [new EmbedBuilder()
+    const sent = await channelResponse(ctx, { embeds: [new EmbedBuilder()
       .setColor(0xe67e22)
       .setTitle('⚡ تحدي أسرع شخص')
       .setDescription('أول شخص يكتب الكلمة وحدها يفوز!')
       .addFields({ name: 'اكتب هذه الكلمة', value: `\n**『 ${word} 』**\n`, inline: false })
       .setFooter({ text: 'اكتبها كما هي بدون أي كلمات إضافية' })] });
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await removeDuplicateSpeedChallenges(ctx.channel);
+    return sent;
   }
   if (name === 'lucky') {
     const id = gameId();
