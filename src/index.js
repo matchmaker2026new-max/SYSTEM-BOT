@@ -10,6 +10,7 @@ const store = require('./store');
 const instanceLockPath = path.join(__dirname, '..', '.bot.lock');
 const messageClaimDir = path.join(__dirname, '..', '.message-claims');
 const interactionClaimDir = path.join(__dirname, '..', '.interaction-claims');
+const gameStartClaimDir = path.join(__dirname, '..', '.game-start-claims');
 function ensureSingleInstance() {
   try {
     if (fs.existsSync(instanceLockPath)) {
@@ -91,6 +92,18 @@ function claimInteraction(interactionId) {
     return true;
   } catch (error) {
     return error.code === 'EEXIST' ? false : true;
+  }
+}
+function claimGameStart(channelId) {
+  fs.mkdirSync(gameStartClaimDir, { recursive: true });
+  const claimPath = path.join(gameStartClaimDir, `${channelId}.lock`);
+  try {
+    const handle = fs.openSync(claimPath, 'wx');
+    fs.closeSync(handle);
+    setTimeout(() => fs.rmSync(claimPath, { force: true }), 5000);
+    return true;
+  } catch (error) {
+    return error.code !== 'EEXIST';
   }
 }
 async function feedbackAlreadyHandled(message) {
@@ -406,6 +419,8 @@ async function execute(name, ctx, args = []) {
     return channelResponse(ctx, { embeds: [card('🎬 خمن الفيلم', `الفيلم مخفي خلف هذه الإيموجيات:\n\n# ${question.emojis}\n\nأول إجابة صحيحة تفوز!`, 0xf1c40f)], components: [gameButtons('movie', id, options)] });
   }
   if (name === 'speed') {
+    const existingSpeed = [...activeGames.values()].find(game => game.type === 'speed' && game.channelId === ctx.channelId && !game.winnerId);
+    if (existingSpeed || !claimGameStart(ctx.channelId)) return reply(ctx, 'توجد جولة سرعة فعالة بالفعل في هذا الروم.');
     const id = gameId();
     const word = speedWords[Math.floor(Math.random() * speedWords.length)];
     activeGames.set(id, { type: 'speed', answer: word, channelId: guild?.id ? ctx.channelId : null, winnerId: null, createdAt: Date.now() });
@@ -414,7 +429,7 @@ async function execute(name, ctx, args = []) {
       .setColor(0xe67e22)
       .setTitle('⚡ تحدي أسرع شخص')
       .setDescription('أول شخص يكتب الكلمة وحدها يفوز!')
-      .addFields({ name: 'اكتب هذه الكلمة', value: `\n# **${word}**\n`, inline: false })
+      .addFields({ name: 'اكتب هذه الكلمة', value: `\n╭━━━━━━━━━━━━╮\n┃   **${word}**   ┃\n╰━━━━━━━━━━━━╯\n`, inline: false })
       .setFooter({ text: 'اكتبها كما هي بدون أي كلمات إضافية' })] });
   }
   if (name === 'lucky') {

@@ -4,4 +4,5 @@ data/store.json
 .bot.lock
 .message-claims/
 .interaction-claims/
+.game-start-claims/
 npm-debug.log*
