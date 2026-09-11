@@ -55,6 +55,7 @@ const TAX_RATE = 0.05;
 const processedMessageIds = new Map();
 const processedInteractionIds = new Set();
 const activeGames = new Map();
+const botSendGuard = new Map();
 const movieQuestions = [
   { emojis: '🧊🚢💔', answer: 'Titanic', options: ['Titanic', 'Avatar', 'Joker', 'Frozen'] },
   { emojis: '🦁👑🌅', answer: 'The Lion King', options: ['The Lion King', 'The Matrix', 'Gladiator', 'Aladdin'] },
@@ -144,13 +145,27 @@ async function feedbackAlreadyHandled(message) {
   const recent = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
   return recent?.some(item => item.author.id === client.user.id && item.reference?.messageId === message.id) || false;
 }
-async function sendFeedbackMessage(channel, payload) {
+function botMessageKey(channel, payload) {
+  try {
+    return `${channel.id}:${JSON.stringify(payload)}`;
+  } catch {
+    return `${channel.id}:${String(payload)}`;
+  }
+}
+async function safeBotSend(channel, payload) {
+  const key = botMessageKey(channel, payload);
+  if (botSendGuard.has(key)) return null;
+  botSendGuard.set(key, Date.now());
+  setTimeout(() => botSendGuard.delete(key), 1500);
   try {
     return await channel.send(payload);
   } catch (error) {
     if (error.code !== 50035) throw error;
     return channel.send(payload);
   }
+}
+async function sendFeedbackMessage(channel, payload) {
+  return safeBotSend(channel, payload);
 }
 
 const MOD_ROLE_ID = '1546616567016722463';
@@ -378,7 +393,8 @@ function actionMessage(guild, text) {
   return `${fever} ${text} ${vxy}`.trim();
 }
 function channelResponse(ctx, payload) {
-  return ctx.isChatInputCommand?.() ? ctx.reply(payload) : ctx.channel.send(payload);
+  if (ctx.isChatInputCommand?.()) return ctx.reply(payload);
+  return safeBotSend(ctx.channel, payload);
 }
 function settingKey(guildIdValue, name) { return key(guildIdValue, name); }
 function getGuildSetting(guildIdValue, settingName, fallback = null) {
@@ -392,7 +408,7 @@ function shouldSendAutoLine(message) {
   return configuredChannel === message.channel.id && getGuildSetting(message.guild.id, 'line-mode', false) === true;
 }
 async function sendAutoLine(message) {
-  if (shouldSendAutoLine(message)) await message.channel.send({ files: [LINE_IMAGE_URL] }).catch(() => {});
+  if (shouldSendAutoLine(message)) await safeBotSend(message.channel, { files: [LINE_IMAGE_URL] }).catch(() => {});
 }
 
 async function execute(name, ctx, args = []) {
