@@ -2,7 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   Client, GatewayIntentBits, Partials, PermissionFlagsBits,
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, REST, Routes,
+  Collection
 } = require('discord.js');
 const { token, clientId, guildId, prefix, ownerId } = require('./config');
 const store = require('./store');
