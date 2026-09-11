@@ -188,7 +188,7 @@ const aliases = {
   'قول': 'say', 'ارسال': 'send', 'إرسال': 'send', 'امبد': 'embed',
   'لقب': 'nickname', 'اسم': 'rename', 'رتبة': 'role', 'الرتب': 'roles',
   'بنق': 'ping', 'حالة-الحماية': 'protection-status',
-  'خط': 'line-mode', 'اقتراحات': 'suggestion-mode', 'ضريبة': 'tax',
+  'خط': 'line-mode', 'line': 'line-mode', 'اقتراحات': 'suggestion-mode', 'ضريبة': 'tax',
   'حذف-التوكنات': 'remove-all-tokens', 'حذف-توكن': 'remove-token', 'حذف-خط': 'remove-autoline-channel',
   'تعال': 'come', 'رد': 'autoreply-add', 'ردود': 'autoreply-list', 'حذف-رد': 'autoreply-remove', 'تحذير': 'warn',
   'سحب': 'gstart', 'مساعدة': 'help', 'تحذير': 'warn'
@@ -368,7 +368,15 @@ async function execute(name, ctx, args = []) {
   if (name === 'role') { const member = memberOf(ctx); const role = ctx.isChatInputCommand?.() ? ctx.options.getRole('role') : guild.roles.cache.find(item => item.name === args[1] || item.id === args[1]); const action = ctx.isChatInputCommand?.() ? (ctx.options.getString('action') || 'add') : (args[2] || 'add'); if (!member || !role) return reply(ctx, 'حدد العضو والرتبة.'); if (action === 'remove') await member.roles.remove(role); else await member.roles.add(role); return reply(ctx, { embeds: [card('🎭 تم تحديث الرتبة', `${action === 'remove' ? 'تمت إزالة' : 'تمت إضافة'} رتبة **${role.name}** ${action === 'remove' ? 'من' : 'إلى'} ${mention(member)}.`, 0x57f287)] }); }
   if (name === 'logs-info') return reply(ctx, { embeds: [card('📋 حالة السجلات', 'نظام السجلات الأساسي جاهز. يمكن ربط قناة السجلات من إعدادات السيرفر.', 0x57f287)] });
   if (name === 'protection-status') { const settings = store.read().settings; const active = Object.keys(settings).filter(item => item.startsWith(`${guild.id}:`)); return reply(ctx, { embeds: [card(`${EMOJIS.mod} حالة الحماية`, active.length ? active.map(item => `• ${item.split(':').slice(1).join(':')}`).join('\n') : 'لا توجد حماية مفعلة حاليًا.')] }); }
-  if (name === 'line-mode' || name === 'set-autoline-line' || name === 'set-feedback-line' || name === 'set-feedback-room' || name === 'set-message') { const value = ctx.isChatInputCommand?.() ? (ctx.options.getBoolean('enabled') ?? ctx.options.getString('text') ?? ctx.options.getChannel('channel')?.id) : args.join(' '); store.update(data => { data.settings[key(guild.id, name)] = value; }); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم حفظ الإعداد`, 'تم تحديث إعداد هذا السيرفر بنجاح.', 0x57f287)] }); }
+  if (name === 'line-mode') {
+    const value = ctx.isChatInputCommand?.()
+      ? (ctx.options.getBoolean('enabled') ?? false)
+      : !['off', 'false', '0', 'إيقاف', 'تعطيل'].includes(String(args[0] || 'on').toLowerCase());
+    store.update(data => { data.settings[key(guild.id, 'line-mode')] = value; });
+    if (value) await ctx.channel.send({ files: [LINE_IMAGE_URL] }).catch(() => {});
+    return reply(ctx, { embeds: [card(value ? '✅ تم تفعيل الخط' : '⛔ تم تعطيل الخط', value ? 'تم تفعيل الخط التلقائي لهذا السيرفر.' : 'تم تعطيل الخط التلقائي لهذا السيرفر.', 0x57f287)] });
+  }
+  if (name === 'set-autoline-line' || name === 'set-feedback-line' || name === 'set-feedback-room' || name === 'set-message') { const value = ctx.isChatInputCommand?.() ? (ctx.options.getBoolean('enabled') ?? ctx.options.getString('text') ?? ctx.options.getChannel('channel')?.id) : args.join(' '); store.update(data => { data.settings[key(guild.id, name)] = value; }); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم حفظ الإعداد`, 'تم تحديث إعداد هذا السيرفر بنجاح.', 0x57f287)] }); }
   if (name === 'remove-all-tokens' || name === 'remove-token') { store.update(data => { data.settings[key(guild.id, name)] = true; }); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم تنفيذ الحذف`, name === 'remove-all-tokens' ? 'تم حذف جميع التوكنات المحفوظة.' : 'تم حذف التوكن المحدد.', 0x57f287)] }); }
   if (name === 'remove-autoline-channel' || name === 'remove-nadeko-room') { store.update(data => { delete data.settings[key(guild.id, name.replace('remove-', 'add-'))]; }); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم حذف الإعداد`, 'تمت إزالة إعداد القناة بنجاح.', 0x57f287)] }); }
   if (name === 'tax') {
