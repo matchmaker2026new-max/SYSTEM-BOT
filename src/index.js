@@ -204,6 +204,16 @@ function isMod(member) {
 function key(guildId, name) { return `${guildId}:${name}`; }
 function reply(ctx, payload) {
   if (ctx.isChatInputCommand?.()) {
+    return ctx.reply(payload);
+  }
+  const message = typeof payload === 'string'
+    ? { embeds: [card('✅ تم التنفيذ', payload, 0x57f287)], allowedMentions: { parse: [], repliedUser: false } }
+    : payload;
+  const sent = ctx.reply(message);
+  return sent;
+}
+function temporaryReply(ctx, payload) {
+  if (ctx.isChatInputCommand?.()) {
     return ctx.reply(payload).then(() => {
       setTimeout(() => ctx.deleteReply().catch(() => {}), 5000);
     });
@@ -212,9 +222,7 @@ function reply(ctx, payload) {
     ? { embeds: [card('✅ تم التنفيذ', payload, 0x57f287)], allowedMentions: { parse: [], repliedUser: false } }
     : payload;
   const sent = ctx.reply(message);
-  setTimeout(() => {
-    sent.then(m => m.delete().catch(() => {})).catch(() => {});
-  }, 5000);
+  setTimeout(() => sent.then(m => m.delete().catch(() => {})).catch(() => {}), 5000);
   return sent;
 }
 function guildOf(ctx) { return ctx.guild; }
@@ -393,7 +401,7 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'send-broadcast-panel') { const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('broadcast-confirm').setLabel('تأكيد الإرسال').setStyle(ButtonStyle.Danger)); return channelResponse(ctx, { embeds: [card('📢 لوحة البث', 'اضغط الزر لتأكيد إرسال البث.')], components: [row] }); }
   if (name === 'avatar' || name === 'banner') { const user = userOf(ctx); const fetched = await client.users.fetch(user.id, { force: true }); const url = name === 'banner' ? fetched.bannerURL({ size: 1024, extension: 'png' }) : fetched.displayAvatarURL({ size: 1024, extension: 'png' }); return reply(ctx, url ? { embeds: [new EmbedBuilder().setTitle(name === 'banner' ? `بانر ${user.username}` : `صورة ${user.username}`).setImage(url)] } : 'لا يوجد بانر لهذا العضو.'); }
-  if (name === 'clear') { const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100); const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1; const messages = await ctx.channel.bulkDelete(deleteAmount, true); const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1); const payload = { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] }; if (ctx.isChatInputCommand?.()) return ctx.reply({ ...payload, ephemeral: true }); const sent = await ctx.channel.send(payload); setTimeout(() => sent.delete().catch(() => {}), 6000); return sent; }
+  if (name === 'clear') { const amount = Math.min(Math.max(numberOf(ctx, args, 'amount', 10), 1), 100); const deleteAmount = ctx.isChatInputCommand?.() ? amount : amount + 1; const messages = await ctx.channel.bulkDelete(deleteAmount, true); const deletedCount = ctx.isChatInputCommand?.() ? messages.size : Math.max(0, messages.size - 1); return temporaryReply(ctx, { embeds: [card(`${EMOJIS.trash} تم تنظيف المحادثة`, `تم حذف **${arabicNumber(deletedCount)}** رسالة بنجاح.`, 0x57f287)] }); }
   if (name === 'delete') return ctx.isChatInputCommand?.() ? reply(ctx, 'استخدم أمر المسح لحذف الرسائل؛ لا يمكن حذف رسالة Slash.') : ctx.delete().catch(() => {});
   if (name === 'unban') {
     const userId = ctx.isChatInputCommand?.() ? ctx.options.getString('user') : args[0];
@@ -401,9 +409,9 @@ async function execute(name, ctx, args = []) {
     await guild.members.unban(userId, 'إزالة الحظر بواسطة البوت');
     return reply(ctx, { embeds: [card('✅ تمت إزالة الحظر', `تم فك الحظر عن المستخدم \`${userId}\` بنجاح.`, 0x57f287)] });
   }
-  if (name === 'ban' || name === 'kick') { const member = memberOf(ctx); if (!member) return reply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (name === 'ban' && !member.bannable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الحظر`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); if (name === 'kick' && !member.kickable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الطرد`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const reason = ctx.isChatInputCommand?.() ? ctx.options.getString('reason') : args.slice(1).join(' '); await (name === 'ban' ? member.ban({ reason: reason || 'لم يتم ذكر سبب' }) : member.kick(reason || 'لم يتم ذكر سبب')); return reply(ctx, { embeds: [card(name === 'ban' ? `${EMOJIS.ban} تم الحظر بنجاح` : `${EMOJIS.kick} تم الطرد بنجاح`, `${name === 'ban' ? 'تم حظر' : 'تم طرد'} العضو ${mention(member)} من السيرفر.\n\n**السبب:** ${reason || 'لم يتم ذكر سبب'}`, 0xed4245)] }); }
-  if (name === 'timeout' || name === 'untimeout') { const member = memberOf(ctx); if (!member) return reply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (!member.moderatable) return reply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر تعديل الإسكات`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const duration = ctx.isChatInputCommand?.() ? Math.min(ctx.options.getInteger('minutes') || 10, 40320) * 60000 : parseDuration(args[1] || '10m'); if (name === 'untimeout') { await member.timeout(null, 'تم فك الإسكات بواسطة البوت'); return reply(ctx, { embeds: [card(`${EMOJIS.ok} تم فك الإسكات`, `تم فك الإسكات عن ${mention(member)} بنجاح.`, 0x57f287)] }); } await member.timeout(duration, 'تم الإسكات بواسطة البوت'); return reply(ctx, { embeds: [card(`${EMOJIS.time} تم إسكات العضو`, `تم إسكات العضو ${mention(member)} لمدة **${prettyDuration(duration)}**.`, 0xfee75c)] }); }
-  if (name === 'lock' || name === 'unlock') { await ctx.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: name === 'unlock' }); return reply(ctx, { embeds: [card(name === 'lock' ? `${EMOJIS.lock} تم قفل القناة` : `${EMOJIS.unlock} تم فتح القناة`, name === 'lock' ? 'تم منع إرسال الرسائل في هذه القناة.' : 'تم السماح بإرسال الرسائل في هذه القناة.', name === 'lock' ? COLOR : 0x57f287)] }); }
+  if (name === 'ban' || name === 'kick') { const member = memberOf(ctx); if (!member) return temporaryReply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (name === 'ban' && !member.bannable) return temporaryReply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الحظر`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); if (name === 'kick' && !member.kickable) return temporaryReply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر الطرد`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const reason = ctx.isChatInputCommand?.() ? ctx.options.getString('reason') : args.slice(1).join(' '); await (name === 'ban' ? member.ban({ reason: reason || 'لم يتم ذكر سبب' }) : member.kick(reason || 'لم يتم ذكر سبب')); return temporaryReply(ctx, { embeds: [card(name === 'ban' ? `${EMOJIS.ban} تم الحظر بنجاح` : `${EMOJIS.kick} تم الطرد بنجاح`, `${name === 'ban' ? 'تم حظر' : 'تم طرد'} العضو ${mention(member)} من السيرفر.\n\n**السبب:** ${reason || 'لم يتم ذكر سبب'}`, 0xed4245)] }); }
+  if (name === 'timeout' || name === 'untimeout') { const member = memberOf(ctx); if (!member) return temporaryReply(ctx, { embeds: [card(`${EMOJIS.error} طريقة الاستخدام`, 'حدد العضو باستخدام منشن أو أمر Slash.', 0xed4245)] }); if (!member.moderatable) return temporaryReply(ctx, { embeds: [card(`${EMOJIS.error} تعذّر تعديل الإسكات`, 'رتبة العضو أعلى من رتبة البوت.', 0xed4245)] }); const duration = ctx.isChatInputCommand?.() ? Math.min(ctx.options.getInteger('minutes') || 10, 40320) * 60000 : parseDuration(args[1] || '10m'); if (name === 'untimeout') { await member.timeout(null, 'تم فك الإسكات بواسطة البوت'); return temporaryReply(ctx, { embeds: [card(`${EMOJIS.ok} تم فك الإسكات`, `تم فك الإسكات عن ${mention(member)} بنجاح.`, 0x57f287)] }); } await member.timeout(duration, 'تم الإسكات بواسطة البوت'); return temporaryReply(ctx, { embeds: [card(`${EMOJIS.time} تم إسكات العضو`, `تم إسكات العضو ${mention(member)} لمدة **${prettyDuration(duration)}**.`, 0xfee75c)] }); }
+  if (name === 'lock' || name === 'unlock') { await ctx.channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: name === 'unlock' }); return temporaryReply(ctx, { embeds: [card(name === 'lock' ? `${EMOJIS.lock} تم قفل القناة` : `${EMOJIS.unlock} تم فتح القناة`, name === 'lock' ? 'تم منع إرسال الرسائل في هذه القناة.' : 'تم السماح بإرسال الرسائل في هذه القناة.', name === 'lock' ? COLOR : 0x57f287)] }); }
   if (name === 'add-user' || name === 'remove-user') { const member = memberOf(ctx); if (!member) return reply(ctx, 'حدد العضو باستخدام منشن أو أمر Slash.'); const canWrite = name === 'add-user'; await ctx.channel.permissionOverwrites.edit(member, { ViewChannel: canWrite, ReadMessageHistory: canWrite, SendMessages: canWrite, SendMessagesInThreads: canWrite, AttachFiles: canWrite, EmbedLinks: canWrite }); return reply(ctx, canWrite ? `✅ تمت إضافة ${member} ويمكنه الكتابة في هذه القناة.` : `✅ تمت إزالة ${member}.`); }
   if (name === 'userinfo') { const member = memberOf(ctx) || ctx.member; return reply(ctx, { embeds: [new EmbedBuilder().setTitle(`معلومات ${member.user.tag}`).setThumbnail(member.user.displayAvatarURL()).addFields({ name: 'المعرف', value: member.id }, { name: 'انضمام', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` })] }); }
   if (name === 'serverinfo') return reply(ctx, { embeds: [new EmbedBuilder().setTitle(guild.name).addFields({ name: 'الأعضاء', value: String(guild.memberCount), inline: true }, { name: 'القنوات', value: String(guild.channels.cache.size), inline: true }, { name: 'المالك', value: `<@${guild.ownerId}>`, inline: true })] });
@@ -448,9 +456,9 @@ async function execute(name, ctx, args = []) {
   }
   if (name === 'warn') {
     const member = memberOf(ctx);
-    if (!member) return reply(ctx, 'حدد العضو.');
+    if (!member) return temporaryReply(ctx, 'حدد العضو.');
     await member.send(`⚠️ تنبيه: تم تحذيرك من السيرفر، الرجاء الالتزام بالقوانين.`).catch(() => {});
-    return reply(ctx, `✅ تم إرسال تحذير إلى ${member}.`);
+    return temporaryReply(ctx, `✅ تم إرسال تحذير إلى ${member}.`);
   }
   if (name === 'autoreply-add') { const trigger = ctx.isChatInputCommand?.() ? ctx.options.getString('trigger') : args[0]; const value = ctx.isChatInputCommand?.() ? ctx.options.getString('reply') : args.slice(1).join(' '); if (!trigger || !value) return reply(ctx, `استخدم: ${prefix}رد الكلمة الرد`); store.update(s => { s.autoreplies[key(guild.id, trigger.toLowerCase())] = value; }); return reply(ctx, '✅ تمت إضافة الرد التلقائي.'); }
   if (name === 'autoreply-list') { const rows = Object.entries(store.read().autoreplies).filter(([k]) => k.startsWith(`${guild.id}:`)).map(([k, v]) => `• **${k.split(':').slice(1).join(':')}** ← ${v}`); return reply(ctx, rows.length ? rows.join('\n') : 'لا توجد ردود تلقائية.'); }
