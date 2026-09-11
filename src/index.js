@@ -592,6 +592,8 @@ client.on('messageCreate', async message => {
   const parsed = parseCommand(rawContent);
 
   if (parsed) {
+    const commandMessage = await message.channel.messages.fetch(message.id).catch(() => null);
+    if (!commandMessage) return;
     try {
       await execute(parsed.name, message, parsed.args);
     } catch (error) {
